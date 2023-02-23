@@ -3,7 +3,6 @@ package kradix
 import (
 	"bytes"
 	"sync"
-	"sync/atomic"
 )
 
 const (
@@ -133,8 +132,13 @@ func (t *RadixTree[T]) isLeaf(n *node[T]) bool {
 
 func (t *RadixTree[T]) Traverse(f func(string, T)) {
 	var wg sync.WaitGroup
-	var count int32
 	stack := make([]*node[T], 0, branchingFactor)
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
 
 	wg.Add(1)
 	stack = append(stack, t.root)
@@ -161,14 +165,11 @@ func (t *RadixTree[T]) Traverse(f func(string, T)) {
 				}
 			}
 			wg.Add(1)
-			atomic.AddInt32(&count, 1)
 			go func(children []*node[T], prefixLen int) {
 				for _, child := range children {
 					stack = append(stack, child)
 				}
-				if atomic.AddInt32(&count, -1) == 0 {
-					wg.Done()
-				}
+				wg.Done()
 			}(children, len(stack))
 
 			// To avoid creating too many goroutines, we only create a new goroutine
@@ -179,7 +180,8 @@ func (t *RadixTree[T]) Traverse(f func(string, T)) {
 		}
 	}
 
-	wg.Wait()
+	wg.Done()
+	<-done
 }
 
 func (t *RadixTree[T]) hasChildren(n *node[T]) bool {
