@@ -134,12 +134,6 @@ func (t *RadixTree[T]) Traverse(f func(string, T)) {
 	var wg sync.WaitGroup
 	stack := make([]*node[T], 0, branchingFactor)
 
-	done := make(chan struct{})
-	go func() {
-		wg.Wait()
-		close(done)
-	}()
-
 	wg.Add(1)
 	stack = append(stack, t.root)
 
@@ -156,11 +150,9 @@ func (t *RadixTree[T]) Traverse(f func(string, T)) {
 		}
 
 		if t.hasChildren(n) {
-			var numChildren int
 			var children []*node[T]
 			for _, e := range n.edges {
 				if e != nil {
-					numChildren++
 					children = append(children, e)
 				}
 			}
@@ -174,14 +166,13 @@ func (t *RadixTree[T]) Traverse(f func(string, T)) {
 
 			// To avoid creating too many goroutines, we only create a new goroutine
 			// once the number of children exceeds a certain threshold.
-			if numChildren > 10 {
+			if len(children) > 10 {
 				wg.Wait()
 			}
 		}
 	}
 
-	wg.Done()
-	<-done
+	wg.Wait()
 }
 
 func (t *RadixTree[T]) hasChildren(n *node[T]) bool {
